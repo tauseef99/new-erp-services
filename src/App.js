@@ -30,7 +30,7 @@ import CustomerService from "./Components/CustomerService";
 import TermsOfService from "./Components/TermsOfService";
 import FAQ from "./Components/FAQ";
 import ProjectTeams from './Components/ProjectTeams';
-
+import Verify from "./Components/Verify";
 import JustERPs from "./Components/JustERPs";
 
 
@@ -65,6 +65,7 @@ function App() {
         <Route path="/erp/team" element={<ProjectTeams />} />
         <Route path="/faq" element={<FAQ />} />
          <Route path="/justerps" element={<JustERPs/>} />
+         <Route path="/verify" element={<Verify />} />
 
 
 
