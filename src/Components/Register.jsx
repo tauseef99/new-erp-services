@@ -3,62 +3,121 @@ import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
+// API Base URL - Use environment variable with fallback
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "https://just-erp-backend.onrender.com";
+
 const Register = () => {
   const [formData, setFormData] = useState({
     username: "",
     email: "",
     password: "",
-    role: "buyer", // default role
+    role: "buyer",
   });
 
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState({ text: "", type: "" }); // success/error
   const navigate = useNavigate();
 
-  // handle input
-  const handleChange = (e) =>
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-
-  // handle role toggle
-  const toggleRole = () => {
-    setFormData({
-      ...formData,
-      role: formData.role === "buyer" ? "seller" : "buyer"
-    });
+  // Handle input changes
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
-  // handle form submit
+  // Handle role toggle
+  const toggleRole = () => {
+    setFormData(prev => ({
+      ...prev,
+      role: prev.role === "buyer" ? "seller" : "buyer"
+    }));
+  };
+
+  // Validate form data
+  const validateForm = () => {
+    if (!formData.username.trim()) {
+      return "Username is required";
+    }
+    if (!formData.email.trim()) {
+      return "Email is required";
+    }
+    if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      return "Email is invalid";
+    }
+    if (formData.password.length < 6) {
+      return "Password must be at least 6 characters";
+    }
+    return null;
+  };
+
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate form
+    const validationError = validateForm();
+    if (validationError) {
+      setMessage({ text: validationError, type: "error" });
+      return;
+    }
+
     setLoading(true);
-    setMessage("");
+    setMessage({ text: "", type: "" });
+
     try {
-      // const res = await axios.post("http://localhost:5000/api/auth/register", {
-      
-      const res = await axios.post("https://just-erp-backend.onrender.com/api/auth/register", {
-        username: formData.username,
-        email: formData.email,
-        password: formData.password,
-        roles: [formData.role],
+      const response = await axios.post(
+        `${API_BASE_URL}/api/auth/register`,
+        {
+          username: formData.username.trim(),
+          email: formData.email.trim().toLowerCase(),
+          password: formData.password,
+          roles: [formData.role],
+        },
+        {
+          timeout: 30000, // 30 second timeout
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+
+      setMessage({ 
+        text: "Registered successfully! Please check your email for verification code.", 
+        type: "success" 
       });
 
-      // setMessage("✅ Registered successfully!");
-      // console.log("Registered user:", res.data);
-
+      // Save email for verification page
+      localStorage.setItem("verif_email", formData.email);
       
-      // navigate("/signIn");
+      // Redirect to verification page after short delay
+      setTimeout(() => {
+        navigate("/verify", { 
+          state: { 
+            email: formData.email,
+            from: "register" 
+          } 
+        });
+      }, 1500);
 
-      setMessage("Registered successfully! Please check your email for verification code.");
-console.log("Registered user:", res.data);
-
-// Save email for verification page
-localStorage.setItem("verif_email", formData.email);
-
-// Redirect to verification page instead of login
-navigate("/verify", { state: { email: formData.email } });
-    } catch (err) {
-      setMessage(err.response?.data?.message || " Registration failed");
-      console.error("Error registering:", err.response?.data || err.message);
+    } catch (error) {
+      console.error("Registration error:", error);
+      
+      let errorMessage = "Registration failed. Please try again.";
+      
+      if (error.response) {
+        // Server responded with error status
+        errorMessage = error.response.data?.message || errorMessage;
+      } else if (error.request) {
+        // Request was made but no response received
+        errorMessage = "Unable to connect to server. Please check your internet connection.";
+      } else {
+        // Something else happened
+        errorMessage = error.message || errorMessage;
+      }
+      
+      setMessage({ text: errorMessage, type: "error" });
     } finally {
       setLoading(false);
     }
@@ -73,9 +132,10 @@ navigate("/verify", { state: { email: formData.email } });
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {/* Username Field */}
           <div className="space-y-2">
             <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-              Username
+              Username *
             </label>
             <input
               type="text"
@@ -84,14 +144,17 @@ navigate("/verify", { state: { email: formData.email } });
               placeholder="Enter your username"
               value={formData.username}
               onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#708238] focus:border-transparent transition"
+              disabled={loading}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#708238] focus:border-transparent transition disabled:opacity-50 disabled:cursor-not-allowed"
               required
+              minLength={3}
             />
           </div>
           
+          {/* Email Field */}
           <div className="space-y-2">
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              Email
+              Email *
             </label>
             <input
               type="email"
@@ -100,36 +163,42 @@ navigate("/verify", { state: { email: formData.email } });
               placeholder="Enter your email"
               value={formData.email}
               onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#708238] focus:border-transparent transition"
+              disabled={loading}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#708238] focus:border-transparent transition disabled:opacity-50 disabled:cursor-not-allowed"
               required
             />
           </div>
           
+          {/* Password Field */}
           <div className="space-y-2">
             <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              Password
+              Password *
             </label>
             <input
               type="password"
               id="password"
               name="password"
-              placeholder="Create a password"
+              placeholder="Create a password (min. 6 characters)"
               value={formData.password}
               onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#708238] focus:border-transparent transition"
+              disabled={loading}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#708238] focus:border-transparent transition disabled:opacity-50 disabled:cursor-not-allowed"
               required
+              minLength={6}
             />
           </div>
           
+          {/* Role Selection */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              I want to be a
+              I want to be a *
             </label>
             <div className="flex bg-gray-100 rounded-lg p-1">
               <button
                 type="button"
                 onClick={toggleRole}
-                className={`flex-1 py-2 px-4 rounded-md font-medium transition-all duration-300 ${
+                disabled={loading}
+                className={`flex-1 py-2 px-4 rounded-md font-medium transition-all duration-300 disabled:opacity-50 ${
                   formData.role === "buyer" 
                     ? "bg-white text-[#708238] shadow-md" 
                     : "bg-transparent text-gray-500 hover:text-gray-700"
@@ -140,7 +209,8 @@ navigate("/verify", { state: { email: formData.email } });
               <button
                 type="button"
                 onClick={toggleRole}
-                className={`flex-1 py-2 px-4 rounded-md font-medium transition-all duration-300 ${
+                disabled={loading}
+                className={`flex-1 py-2 px-4 rounded-md font-medium transition-all duration-300 disabled:opacity-50 ${
                   formData.role === "seller" 
                     ? "bg-white text-[#708238] shadow-md" 
                     : "bg-transparent text-gray-500 hover:text-gray-700"
@@ -151,12 +221,13 @@ navigate("/verify", { state: { email: formData.email } });
             </div>
           </div>
 
+          {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
-            className={`w-full py-3 px-4 rounded-lg font-semibold text-white transition-all ${
+            className={`w-full py-3 px-4 rounded-lg font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
               loading 
-                ? "bg-gray-400 cursor-not-allowed" 
+                ? "bg-gray-400" 
                 : "bg-gradient-to-r from-[#FFA500] to-[#8fa752] hover:from-[#5c6b2d] hover:to-[#748b3f] shadow-md hover:shadow-lg"
             }`}
           >
@@ -174,20 +245,27 @@ navigate("/verify", { state: { email: formData.email } });
           </button>
         </form>
         
-        {message && (
-          <div className={`px-6 pb-4 ${message.includes("✅") ? "text-green-600" : "text-red-600"}`}>
-            <div className={`p-3 rounded-lg ${message.includes("✅") ? "bg-green-50" : "bg-red-50"} border ${message.includes("✅") ? "border-green-200" : "border-red-200"}`}>
-              {message}
+        {/* Message Display */}
+        {message.text && (
+          <div className={`px-6 pb-4 ${message.type === "success" ? "text-green-600" : "text-red-600"}`}>
+            <div className={`p-3 rounded-lg border ${
+              message.type === "success" 
+                ? "bg-green-50 border-green-200" 
+                : "bg-red-50 border-red-200"
+            }`}>
+              {message.text}
             </div>
           </div>
         )}
         
+        {/* Login Redirect */}
         <div className="px-6 pb-6 text-center">
           <p className="text-gray-600">
             Already have an account?{" "}
             <button 
               onClick={() => navigate("/signIn")} 
-              className="text-[#708238] font-semibold hover:underline focus:outline-none transition-all duration-300 hover:text-[#5c6b2d]"
+              disabled={loading}
+              className="text-[#708238] font-semibold hover:underline focus:outline-none transition-all duration-300 hover:text-[#5c6b2d] disabled:opacity-50"
             >
               Sign in
             </button>
