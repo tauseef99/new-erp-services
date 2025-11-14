@@ -33,7 +33,9 @@ const Register = () => {
     setLoading(true);
     setMessage("");
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/register", {
+      // const res = await axios.post("http://localhost:5000/api/auth/register", {
+      
+      const res = await axios.post("https://just-erp-backend.onrender.com/api/auth/register", {
         username: formData.username,
         email: formData.email,
         password: formData.password,
