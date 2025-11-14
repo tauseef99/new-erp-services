@@ -91,7 +91,7 @@ const Register = () => {
     roles: [formData.role],
   },
   {
-    timeout: 30000,
+    timeout: 60000,
     headers: {
       'Content-Type': 'application/json',
     },
