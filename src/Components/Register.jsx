@@ -42,13 +42,22 @@ const Register = () => {
         roles: [formData.role],
       });
 
-      setMessage("✅ Registered successfully!");
-      console.log("Registered user:", res.data);
+      // setMessage("✅ Registered successfully!");
+      // console.log("Registered user:", res.data);
 
-      // Redirect to login after success
-      navigate("/signIn");
+      
+      // navigate("/signIn");
+
+      setMessage("Registered successfully! Please check your email for verification code.");
+console.log("Registered user:", res.data);
+
+// Save email for verification page
+localStorage.setItem("verif_email", formData.email);
+
+// Redirect to verification page instead of login
+navigate("/verify", { state: { email: formData.email } });
     } catch (err) {
-      setMessage(err.response?.data?.message || "❌ Registration failed");
+      setMessage(err.response?.data?.message || " Registration failed");
       console.error("Error registering:", err.response?.data || err.message);
     } finally {
       setLoading(false);
