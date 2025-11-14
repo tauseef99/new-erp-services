@@ -67,21 +67,37 @@ const Register = () => {
     setMessage({ text: "", type: "" });
 
     try {
+      // const response = await axios.post(
+      //   `${API_BASE_URL}/api/auth/register`,
+      //   {
+      //     username: formData.username.trim(),
+      //     email: formData.email.trim().toLowerCase(),
+      //     password: formData.password,
+      //     roles: [formData.role],
+      //   },
+      //   {
+      //     timeout: 30000, // 30 second timeout
+      //     headers: {
+      //       'Content-Type': 'application/json',
+      //     }
+      //   }
+      // );
       const response = await axios.post(
-        `${API_BASE_URL}/api/auth/register`,
-        {
-          username: formData.username.trim(),
-          email: formData.email.trim().toLowerCase(),
-          password: formData.password,
-          roles: [formData.role],
-        },
-        {
-          timeout: 30000, // 30 second timeout
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        }
-      );
+  `${API_BASE_URL}/api/auth/register`,
+  {
+    username: formData.username.trim(),
+    email: formData.email.trim().toLowerCase(),
+    password: formData.password,
+    roles: [formData.role],
+  },
+  {
+    timeout: 30000,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    withCredentials: false // Add this line
+  }
+);
 
       setMessage({ 
         text: "Registered successfully! Please check your email for verification code.", 
