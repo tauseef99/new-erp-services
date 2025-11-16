@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
+// API Base URL - Use environment variable with fallback
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "https://just-erp-backend.onrender.com";
+
 const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
   const [formData, setFormData] = useState(section === 'professionalSummary' ? '' : []);
   const [imagePreview, setImagePreview] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     // Reset form data when modal opens or section changes
@@ -17,6 +22,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
       // For array data, ensure we have an array
       setFormData(Array.isArray(data) ? [...data] : []);
     }
+    setError('');
   }, [data, isOpen, section]);
 
   const handleInputChange = (e) => {
@@ -80,18 +86,24 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
 
     // Upload to server
     setUploading(true);
+    setError('');
     try {
       const uploadFormData = new FormData();
       uploadFormData.append('profileImage', file);
       
       const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
       const cleanToken = token.replace(/^"(.*)"$/, '$1');
       
-      const response = await axios.post('http://localhost:5000/api/seller/profile/upload-image', uploadFormData, {
+      const response = await axios.post(`${API_BASE_URL}/api/seller/profile/upload-image`, uploadFormData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           'Authorization': `Bearer ${cleanToken}`
-        }
+        },
+        timeout: 30000,
       });
       
       // Set the image path returned from server
@@ -100,21 +112,27 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
       setUploading(false);
       
       // Call onSave to update the profile image immediately
-      onSave(imagePath);
+      await onSave(imagePath);
     } catch (error) {
       console.error('Error uploading image:', error);
       setUploading(false);
-      alert('Failed to upload image. Please try again.');
+      setError(error.response?.data?.message || 'Failed to upload image. Please try again.');
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaving(true);
+    setError('');
+    
     try {
       await onSave(formData);
       onClose();
     } catch (error) {
       console.error('Error saving data:', error);
+      setError(error.response?.data?.message || 'Failed to save changes. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -152,6 +170,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                 type="button"
                 onClick={addArrayItem}
                 className="bg-[#708238] text-white px-3 py-1 rounded text-sm hover:bg-[#5a6a2d] transition-colors"
+                disabled={saving}
               >
                 Add Role
               </button>
@@ -173,6 +192,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                         onChange={(e) => handleArrayChange(index, 'year', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                         placeholder="e.g., 2020-2022"
+                        disabled={saving}
                       />
                     </div>
                     <div>
@@ -183,6 +203,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                         onChange={(e) => handleArrayChange(index, 'role', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                         placeholder="e.g., Project Manager"
+                        disabled={saving}
                       />
                     </div>
                   </div>
@@ -195,6 +216,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                       rows="2"
                       placeholder="Describe your responsibilities"
+                      disabled={saving}
                     />
                   </div>
                   
@@ -207,6 +229,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                         onChange={(e) => handleArrayChange(index, 'teamSize', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                         placeholder="e.g., 5-10 people"
+                        disabled={saving}
                       />
                     </div>
                     <div>
@@ -217,6 +240,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                         onChange={(e) => handleArrayChange(index, 'industry', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                         placeholder="e.g., IT, Healthcare"
+                        disabled={saving}
                       />
                     </div>
                   </div>
@@ -225,6 +249,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                     type="button"
                     onClick={() => removeArrayItem(index)}
                     className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors"
+                    disabled={saving}
                   >
                     Remove
                   </button>
@@ -243,6 +268,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                 type="button"
                 onClick={addArrayItem}
                 className="bg-[#708238] text-white px-3 py-1 rounded text-sm hover:bg-[#5a6a2d] transition-colors"
+                disabled={saving}
               >
                 Add Project
               </button>
@@ -263,6 +289,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                       onChange={(e) => handleArrayChange(index, 'name', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                       placeholder="Project name"
+                      disabled={saving}
                     />
                   </div>
                   
@@ -275,6 +302,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                         onChange={(e) => handleArrayChange(index, 'industry', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                         placeholder="Industry"
+                        disabled={saving}
                       />
                     </div>
                     <div>
@@ -285,6 +313,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                         onChange={(e) => handleArrayChange(index, 'role', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                         placeholder="Your role in the project"
+                        disabled={saving}
                       />
                     </div>
                   </div>
@@ -298,6 +327,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                         onChange={(e) => handleArrayChange(index, 'teamSize', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                         placeholder="Team size"
+                        disabled={saving}
                       />
                     </div>
                     <div>
@@ -308,6 +338,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                         onChange={(e) => handleArrayChange(index, 'activities', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                         placeholder="Activities performed"
+                        disabled={saving}
                       />
                     </div>
                   </div>
@@ -316,6 +347,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                     type="button"
                     onClick={() => removeArrayItem(index)}
                     className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors"
+                    disabled={saving}
                   >
                     Remove
                   </button>
@@ -334,6 +366,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                 type="button"
                 onClick={addArrayItem}
                 className="bg-[#708238] text-white px-3 py-1 rounded text-sm hover:bg-[#5a6a2d] transition-colors"
+                disabled={saving}
               >
                 Add Skill
               </button>
@@ -358,6 +391,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                       }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                       placeholder="e.g., JavaScript, React, Node.js"
+                      disabled={saving}
                     />
                   </div>
                   
@@ -365,6 +399,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                     type="button"
                     onClick={() => removeArrayItem(index)}
                     className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors"
+                    disabled={saving}
                   >
                     Remove
                   </button>
@@ -383,6 +418,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                 type="button"
                 onClick={addArrayItem}
                 className="bg-[#708238] text-white px-3 py-1 rounded text-sm hover:bg-[#5a6a2d] transition-colors"
+                disabled={saving}
               >
                 Add Service
               </button>
@@ -407,6 +443,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                       }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                       placeholder="Service name"
+                      disabled={saving}
                     />
                   </div>
                   
@@ -414,6 +451,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                     type="button"
                     onClick={() => removeArrayItem(index)}
                     className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors"
+                    disabled={saving}
                   >
                     Remove
                   </button>
@@ -432,6 +470,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                 type="button"
                 onClick={addArrayItem}
                 className="bg-[#708238] text-white px-3 py-1 rounded text-sm hover:bg-[#5a6a2d] transition-colors"
+                disabled={saving}
               >
                 Add Certification
               </button>
@@ -452,6 +491,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                       onChange={(e) => handleArrayChange(index, 'name', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                       placeholder="Certification name"
+                      disabled={saving}
                     />
                   </div>
                   
@@ -464,6 +504,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                         onChange={(e) => handleArrayChange(index, 'exam', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                         placeholder="Exam name"
+                        disabled={saving}
                       />
                     </div>
                     <div>
@@ -474,6 +515,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                         onChange={(e) => handleArrayChange(index, 'number', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                         placeholder="Certification number"
+                        disabled={saving}
                       />
                     </div>
                   </div>
@@ -487,6 +529,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                         onChange={(e) => handleArrayChange(index, 'issuedBy', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                         placeholder="Issuing organization"
+                        disabled={saving}
                       />
                     </div>
                     <div>
@@ -497,6 +540,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                         onChange={(e) => handleArrayChange(index, 'validity', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
                         placeholder="Validity or expiration date"
+                        disabled={saving}
                       />
                     </div>
                   </div>
@@ -505,6 +549,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                     type="button"
                     onClick={() => removeArrayItem(index)}
                     className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors"
+                    disabled={saving}
                   >
                     Remove
                   </button>
@@ -525,6 +570,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                 type="button"
                 onClick={addArrayItem}
                 className="bg-[#708238] text-white px-3 py-1 rounded text-sm hover:bg-[#5a6a2d] transition-colors"
+                disabled={saving}
               >
                 Add Language
               </button>
@@ -544,6 +590,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                         value={lang.language || ''}
                         onChange={(e) => handleArrayChange(index, 'language', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
+                        disabled={saving}
                       >
                         <option value="">Select Language</option>
                         {languageOptions.map(langOption => (
@@ -557,6 +604,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                         value={lang.proficiency || ''}
                         onChange={(e) => handleArrayChange(index, 'proficiency', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#708238]"
+                        disabled={saving}
                       >
                         <option value="">Select proficiency</option>
                         <option value="Basic">Basic</option>
@@ -571,6 +619,7 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
                     type="button"
                     onClick={() => removeArrayItem(index)}
                     className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors"
+                    disabled={saving}
                   >
                     Remove
                   </button>
@@ -600,12 +649,19 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
             <button
               onClick={onClose}
               className="text-gray-500 hover:text-gray-700 transition-colors"
+              disabled={saving}
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit}>
             {renderFormFields()}
@@ -614,15 +670,27 @@ const EditSectionModal = ({ section, data, isOpen, onClose, onSave }) => {
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 transition-colors"
+                disabled={saving}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d] transition-colors"
+                disabled={saving}
+                className="px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
               >
-                Save Changes
+                {saving ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Saving...
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
               </button>
             </div>
           </form>

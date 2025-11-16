@@ -2,6 +2,9 @@ import React, { useState, useEffect } from "react";
 import { FaTimes, FaArrowRight, FaArrowLeft, FaCheck, FaSpinner } from "react-icons/fa";
 import axios from "axios";
 
+// API Base URL - Use environment variable with fallback
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "https://just-erp-backend.onrender.com";
+
 export default function ProfileWizardModal({ 
   showWizard, 
   closeWizard, 
@@ -42,23 +45,27 @@ export default function ProfileWizardModal({
         try {
           const cleanToken = token.replace(/^"(.*)"$/, '$1');
           // Simple validation request
-          await axios.get('http://localhost:5000/api/seller/profile', {
-            headers: { Authorization: `Bearer ${cleanToken}` }
+          await axios.get(`${API_BASE_URL}/api/seller/profile`, {
+            headers: { Authorization: `Bearer ${cleanToken}` },
+            timeout: 30000,
           });
         } catch (error) {
           if (error.response?.status === 401) {
             localStorage.removeItem('token');
+            localStorage.removeItem('user');
             setSaveStatus("Error: Session expired. Please log in again.");
             setTimeout(() => {
-              window.location.href = '/login';
+              window.location.href = '/signIn';
             }, 2000);
           }
         }
       }
     };
     
-    validateToken();
-  }, []);
+    if (showWizard) {
+      validateToken();
+    }
+  }, [showWizard]);
 
   // Load profile data when modal opens
   useEffect(() => {
@@ -80,11 +87,12 @@ export default function ProfileWizardModal({
       
       const cleanToken = token.replace(/^"(.*)"$/, '$1');
       
-      const response = await axios.get('http://localhost:5000/api/profile-wizard', {
+      const response = await axios.get(`${API_BASE_URL}/api/profile-wizard`, {
         headers: { 
           Authorization: `Bearer ${cleanToken}`,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 30000,
       });
       
       const data = response.data;
@@ -103,12 +111,15 @@ export default function ProfileWizardModal({
     } catch (error) {
       if (error.response?.status === 401) {
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
         setSaveStatus("Error: Session expired. Please log in again.");
         setTimeout(() => {
-          window.location.href = '/login';
+          window.location.href = '/signIn';
         }, 2000);
+      } else {
+        console.error('Error loading profile data:', error);
+        setSaveStatus("Error: Failed to load profile data");
       }
-      console.error('Error loading profile data:', error);
     } finally {
       setLoading(false);
     }
@@ -122,9 +133,8 @@ export default function ProfileWizardModal({
       // Check if token exists
       if (!token) {
         setSaveStatus("Error: No authentication token found");
-        // Redirect to login or handle token absence
         setTimeout(() => {
-          window.location.href = '/login';
+          window.location.href = '/signIn';
         }, 2000);
         return;
       }
@@ -145,7 +155,7 @@ export default function ProfileWizardModal({
         default: stepData = {};
       }
       
-      const response = await axios.put('http://localhost:5000/api/profile-wizard/step', {
+      const response = await axios.put(`${API_BASE_URL}/api/profile-wizard/step`, {
         step,
         data: stepData,
         isCompleted: true
@@ -153,7 +163,8 @@ export default function ProfileWizardModal({
         headers: { 
           Authorization: `Bearer ${cleanToken}`,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 30000,
       });
       
       setSaveStatus("Saved successfully!");
@@ -166,9 +177,10 @@ export default function ProfileWizardModal({
         setSaveStatus("Error: Session expired. Please log in again.");
         // Clear invalid token
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
         // Redirect to login or show login modal
         setTimeout(() => {
-          window.location.href = '/login';
+          window.location.href = '/signIn';
         }, 2000);
       } else {
         const errorMessage = error.response?.data?.message || error.message;
@@ -207,11 +219,12 @@ export default function ProfileWizardModal({
           const cleanToken = token.replace(/^"(.*)"$/, '$1');
           console.log('Generating tagline...');
           
-          const response = await axios.post('http://localhost:5000/api/profile-wizard/tagline', {}, {
+          const response = await axios.post(`${API_BASE_URL}/api/profile-wizard/tagline`, {}, {
             headers: { 
               Authorization: `Bearer ${cleanToken}`,
               'Content-Type': 'application/json'
-            }
+            },
+            timeout: 30000,
           });
           
           console.log('Tagline generated:', response.data);
@@ -282,6 +295,7 @@ export default function ProfileWizardModal({
             <button 
               onClick={closeWizard}
               className="text-gray-500 hover:text-gray-700"
+              disabled={saving}
             >
               <FaTimes className="w-5 h-5" />
             </button>
@@ -295,14 +309,16 @@ export default function ProfileWizardModal({
               <div key={index} className="flex flex-col items-center">
                 <button
                   onClick={() => handleStepClick(index)}
-                  disabled={saving}
+                  disabled={saving || (index > completedSteps.length + 1)}
                   className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
                     currentStep === index 
                       ? "border-[#FFA500] bg-[#FFA500] text-white" 
                       : completedSteps.includes(index)
                         ? "border-green-500 bg-green-500 text-white"
                         : "border-gray-300 bg-white text-gray-500"
-                  } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  } ${saving ? 'opacity-50 cursor-not-allowed' : ''} ${
+                    index > completedSteps.length + 1 ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 >
                   {completedSteps.includes(index) && index !== currentStep ? (
                     <FaCheck className="w-4 h-4" />
@@ -326,61 +342,69 @@ export default function ProfileWizardModal({
             <ProfessionalSummaryStep 
               summary={professionalSummary} 
               setSummary={setProfessionalSummary} 
+              disabled={saving}
             />
           )}
           {currentStep === 1 && (
             <FunctionalRoleStep 
               roles={functionalRoles} 
               setRoles={setFunctionalRoles} 
+              disabled={saving}
             />
           )}
           {currentStep === 2 && (
             <TechnicalRoleStep 
               roles={technicalRoles} 
               setRoles={setTechnicalRoles} 
+              disabled={saving}
             />
           )}
           {currentStep === 3 && (
             <ProjectHistoryStep 
               projects={projects} 
               setProjects={setProjects} 
+              disabled={saving}
             />
           )}
           {currentStep === 4 && (
             <TechnicalSkillsStep 
               skills={technicalSkills} 
               setSkills={setTechnicalSkills} 
+              disabled={saving}
             />
           )}
           {currentStep === 5 && (
             <CertificationStep 
               certs={certifications} 
               setCerts={setCertifications} 
+              disabled={saving}
             />
           )}
           {currentStep === 6 && (
             <ServicesOfferedStep 
               services={servicesOffered} 
               setServices={setServicesOffered} 
+              disabled={saving}
             />
           )}
           {currentStep === 7 && (
             <LanguageSkillsStep 
               languages={languages} 
               setLanguages={setLanguages} 
+              disabled={saving}
             />
           )}
         </div>
         
         {/* Navigation Buttons */}
-        <div className="flex justify-between  p-6 border-t border-gray-200">
+        <div className="flex justify-between p-6 border-t border-gray-200">
           <button
             onClick={handleBack}
             disabled={currentStep === 0 || saving}
             className={`flex items-center px-4 py-2 rounded-md ${
               currentStep === 0 || saving
-                ? "bg-[#FFA500] text-white cursor-not-allowed" 
-                : "bg-[#FFA500] text-white hover:bg-gray-200"
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed" 
+                : "bg-[#FFA500] text-white hover:bg-[#e59400]"
             }`}
           >
             <FaArrowLeft className="mr-2" /> Back
@@ -400,9 +424,8 @@ export default function ProfileWizardModal({
   );
 }
 
-
 // Step Components with props for data and setters
-function ProfessionalSummaryStep({ summary, setSummary }) {
+function ProfessionalSummaryStep({ summary, setSummary, disabled }) {
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-gray-800">Professional Summary</h3>
@@ -421,7 +444,8 @@ function ProfessionalSummaryStep({ summary, setSummary }) {
           }}
           rows={6}
           maxLength={150}
-          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={disabled}
         />
         <p className="text-sm text-gray-500 mt-1">{summary.length}/150</p>
       </div>
@@ -429,7 +453,7 @@ function ProfessionalSummaryStep({ summary, setSummary }) {
   );
 }
 
-function FunctionalRoleStep({ roles, setRoles }) {
+function FunctionalRoleStep({ roles, setRoles, disabled }) {
   const [newRole, setNewRole] = useState({ year: "", role: "", responsibility: "", teamSize: "", industry: "" });
 
   const addRole = () => {
@@ -470,7 +494,8 @@ function FunctionalRoleStep({ roles, setRoles }) {
                 <td className="border border-gray-200 px-4 py-2">
                   <button 
                     onClick={() => removeRole(index)}
-                    className="text-red-500 hover:text-red-700"
+                    className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={disabled}
                   >
                     Remove
                   </button>
@@ -491,7 +516,8 @@ function FunctionalRoleStep({ roles, setRoles }) {
               value={newRole.year}
               onChange={(e) => setNewRole({...newRole, year: e.target.value})}
               placeholder="e.g. June 2023 to Current"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -502,7 +528,8 @@ function FunctionalRoleStep({ roles, setRoles }) {
               value={newRole.role}
               onChange={(e) => setNewRole({...newRole, role: e.target.value})}
               placeholder="e.g. SAP MM Senior Consultant"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -513,7 +540,8 @@ function FunctionalRoleStep({ roles, setRoles }) {
               value={newRole.responsibility}
               onChange={(e)=> setNewRole({...newRole, responsibility: e.target.value})}
               placeholder="e.g. Configuration, Sign-Off, BA, documentation"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -524,7 +552,8 @@ function FunctionalRoleStep({ roles, setRoles }) {
               value={newRole.teamSize}
               onChange={(e) => setNewRole({...newRole, teamSize: e.target.value})}
               placeholder="e.g. 2"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -535,14 +564,16 @@ function FunctionalRoleStep({ roles, setRoles }) {
               value={newRole.industry}
               onChange={(e) => setNewRole({...newRole, industry: e.target.value})}
               placeholder="e.g. Manuf."
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
         </div>
         
         <button
           onClick={addRole}
-          className="mt-4 px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d]"
+          className="mt-4 px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d] disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={disabled || !newRole.year || !newRole.role || !newRole.responsibility}
         >
           Add Role
         </button>
@@ -551,7 +582,7 @@ function FunctionalRoleStep({ roles, setRoles }) {
   );
 }
 
-function TechnicalRoleStep({ roles, setRoles }) {
+function TechnicalRoleStep({ roles, setRoles, disabled }) {
   const [newRole, setNewRole] = useState({ year: "", role: "", responsibility: "", teamSize: "", industry: "" });
 
   const addRole = () => {
@@ -592,7 +623,8 @@ function TechnicalRoleStep({ roles, setRoles }) {
                 <td className="border border-gray-200 px-4 py-2">
                   <button 
                     onClick={() => removeRole(index)}
-                    className="text-red-500 hover:text-red-700"
+                    className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={disabled}
                   >
                     Remove
                   </button>
@@ -613,7 +645,8 @@ function TechnicalRoleStep({ roles, setRoles }) {
               value={newRole.year}
               onChange={(e) => setNewRole({...newRole, year: e.target.value})}
               placeholder="e.g. June 2023 to Current"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -624,7 +657,8 @@ function TechnicalRoleStep({ roles, setRoles }) {
               value={newRole.role}
               onChange={(e) => setNewRole({...newRole, role: e.target.value})}
               placeholder="e.g. SAP MM Senior Consultant"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -635,7 +669,8 @@ function TechnicalRoleStep({ roles, setRoles }) {
               value={newRole.responsibility}
               onChange={(e) => setNewRole({...newRole, responsibility: e.target.value})}
               placeholder="e.g. Configuration, Sign-Off, BA, documentation"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -646,7 +681,8 @@ function TechnicalRoleStep({ roles, setRoles }) {
               value={newRole.teamSize}
               onChange={(e) => setNewRole({...newRole, teamSize: e.target.value})}
               placeholder="e.g. 2"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -657,14 +693,16 @@ function TechnicalRoleStep({ roles, setRoles }) {
               value={newRole.industry}
               onChange={(e) => setNewRole({...newRole, industry: e.target.value})}
               placeholder="e.g. Manuf."
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
         </div>
         
         <button
           onClick={addRole}
-          className="mt-4 px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d]"
+          className="mt-4 px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d] disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={disabled || !newRole.year || !newRole.role || !newRole.responsibility}
         >
           Add Role
         </button>
@@ -673,7 +711,7 @@ function TechnicalRoleStep({ roles, setRoles }) {
   );
 }
 
-function ProjectHistoryStep({ projects, setProjects }) {
+function ProjectHistoryStep({ projects, setProjects, disabled }) {
   const [newProject, setNewProject] = useState({ name: "", industry: "", role: "", teamSize: "", activities: "" });
 
   const addProject = () => {
@@ -714,7 +752,8 @@ function ProjectHistoryStep({ projects, setProjects }) {
                 <td className="border border-gray-200 px-4 py-2">
                   <button 
                     onClick={() => removeProject(index)}
-                    className="text-red-500 hover:text-red-700"
+                    className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={disabled}
                   >
                     Remove
                   </button>
@@ -735,7 +774,8 @@ function ProjectHistoryStep({ projects, setProjects }) {
               value={newProject.name}
               onChange={(e) => setNewProject({...newProject, name: e.target.value})}
               placeholder="e.g. S4HANA"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -746,7 +786,8 @@ function ProjectHistoryStep({ projects, setProjects }) {
               value={newProject.industry}
               onChange={(e) => setNewProject({...newProject, industry: e.target.value})}
               placeholder="e.g. Manufacturing"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -757,7 +798,8 @@ function ProjectHistoryStep({ projects, setProjects }) {
               value={newProject.role}
               onChange={(e) => setNewProject({...newProject, role: e.target.value})}
               placeholder="e.g. Team Lead"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -768,7 +810,8 @@ function ProjectHistoryStep({ projects, setProjects }) {
               value={newProject.teamSize}
               onChange={(e) => setNewProject({...newProject, teamSize: e.target.value})}
               placeholder="e.g. 4"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -779,14 +822,16 @@ function ProjectHistoryStep({ projects, setProjects }) {
               value={newProject.activities}
               onChange={(e) => setNewProject({...newProject, activities: e.target.value})}
               placeholder="e.g. Interviewing, documentation, communication"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
         </div>
         
         <button
           onClick={addProject}
-          className="mt-4 px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d]"
+          className="mt-4 px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d] disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={disabled || !newProject.name || !newProject.industry || !newProject.role}
         >
           Add Project
         </button>
@@ -795,7 +840,7 @@ function ProjectHistoryStep({ projects, setProjects }) {
   );
 }
 
-function TechnicalSkillsStep({ skills, setSkills }) {
+function TechnicalSkillsStep({ skills, setSkills, disabled }) {
   const [newSkill, setNewSkill] = useState("");
 
   const addSkill = () => {
@@ -821,7 +866,8 @@ function TechnicalSkillsStep({ skills, setSkills }) {
             </span>
             <button
               onClick={() => removeSkill(skill)}
-              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
+              disabled={disabled}
             >
               <FaTimes className="w-3 h-3" />
             </button>
@@ -837,12 +883,14 @@ function TechnicalSkillsStep({ skills, setSkills }) {
             value={newSkill}
             onChange={(e) => setNewSkill(e.target.value)}
             placeholder="Enter a skill"
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={disabled}
           />
           
           <button
             onClick={addSkill}
-            className="px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d]"
+            className="px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d] disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={disabled || !newSkill}
           >
             Add Skill
           </button>
@@ -852,7 +900,7 @@ function TechnicalSkillsStep({ skills, setSkills }) {
   );
 }
 
-function CertificationStep({ certs, setCerts }) {
+function CertificationStep({ certs, setCerts, disabled }) {
   const [newCert, setNewCert] = useState({ name: "", exam: "", number: "", issuedBy: "", validity: "" });
 
   const addCert = () => {
@@ -893,7 +941,8 @@ function CertificationStep({ certs, setCerts }) {
                 <td className="border border-gray-200 px-4 py-2">
                   <button 
                     onClick={() => removeCert(index)}
-                    className="text-red-500 hover:text-red-700"
+                    className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={disabled}
                   >
                     Remove
                   </button>
@@ -914,7 +963,8 @@ function CertificationStep({ certs, setCerts }) {
               value={newCert.name}
               onChange={(e) => setNewCert({...newCert, name: e.target.value})}
               placeholder="e.g. SAP CRM"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -925,7 +975,8 @@ function CertificationStep({ certs, setCerts }) {
               value={newCert.exam}
               onChange={(e) => setNewCert({...newCert, exam: e.target.value})}
               placeholder="e.g. CAT-05"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -936,7 +987,8 @@ function CertificationStep({ certs, setCerts }) {
               value={newCert.number}
               onChange={(e) => setNewCert({...newCert, number: e.target.value})}
               placeholder="e.g. 123456"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -947,7 +999,8 @@ function CertificationStep({ certs, setCerts }) {
               value={newCert.issuedBy}
               onChange={(e) => setNewCert({...newCert, issuedBy: e.target.value})}
               placeholder="e.g. SAP SE"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
@@ -958,14 +1011,16 @@ function CertificationStep({ certs, setCerts }) {
               value={newCert.validity}
               onChange={(e) => setNewCert({...newCert, validity: e.target.value})}
               placeholder="e.g. 2025-12-31"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
         </div>
         
         <button
           onClick={addCert}
-          className="mt-4 px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d]"
+          className="mt-4 px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d] disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={disabled || !newCert.name || !newCert.exam || !newCert.issuedBy}
         >
           Add Certification
         </button>
@@ -974,7 +1029,7 @@ function CertificationStep({ certs, setCerts }) {
   );
 }
 
-function ServicesOfferedStep({ services, setServices }) {
+function ServicesOfferedStep({ services, setServices, disabled }) {
   const [newService, setNewService] = useState("");
 
   const addService = () => {
@@ -1000,7 +1055,8 @@ function ServicesOfferedStep({ services, setServices }) {
             </span>
             <button
               onClick={() => removeService(service)}
-              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
+              disabled={disabled}
             >
               <FaTimes className="w-3 h-3" />
             </button>
@@ -1016,12 +1072,14 @@ function ServicesOfferedStep({ services, setServices }) {
             value={newService}
             onChange={(e) => setNewService(e.target.value)}
             placeholder="Enter a service"
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={disabled}
           />
           
           <button
             onClick={addService}
-            className="px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d]"
+            className="px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d] disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={disabled || !newService}
           >
             Add Service
           </button>
@@ -1031,7 +1089,7 @@ function ServicesOfferedStep({ services, setServices }) {
   );
 }
 
-function LanguageSkillsStep({ languages, setLanguages }) {
+function LanguageSkillsStep({ languages, setLanguages, disabled }) {
   const [newLanguage, setNewLanguage] = useState({ language: "", proficiency: "" });
 
   const addLanguage = () => {
@@ -1066,7 +1124,8 @@ function LanguageSkillsStep({ languages, setLanguages }) {
                 <td className="border border-gray-200 px-4 py-2">
                   <button 
                     onClick={() => removeLanguage(index)}
-                    className="text-red-500 hover:text-red-700"
+                    className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={disabled}
                   >
                     Remove
                   </button>
@@ -1087,30 +1146,32 @@ function LanguageSkillsStep({ languages, setLanguages }) {
               value={newLanguage.language}
               onChange={(e) => setNewLanguage({...newLanguage, language: e.target.value})}
               placeholder="e.g. English"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
             />
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Proficiency</label>
             <select
-  value={newLanguage.proficiency}
-  onChange={(e) => setNewLanguage({...newLanguage, proficiency: e.target.value})}
-  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238]"
->
-  <option value="">Select proficiency</option>
-  <option value="Native">Native</option>
-  <option value="Fluent">Fluent</option>
-  <option value="Intermediate">Intermediate</option>
-  <option value="Basic">Basic</option>
-</select>
-            
+              value={newLanguage.proficiency}
+              onChange={(e) => setNewLanguage({...newLanguage, proficiency: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#708238] focus:border-[#708238] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disabled}
+            >
+              <option value="">Select proficiency</option>
+              <option value="Native">Native</option>
+              <option value="Fluent">Fluent</option>
+              <option value="Intermediate">Intermediate</option>
+              <option value="Basic">Basic</option>
+            </select>
           </div>
         </div>
         
         <button
           onClick={addLanguage}
-          className="mt-4 px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d]"
+          className="mt-4 px-4 py-2 bg-[#708238] text-white rounded-md hover:bg-[#5a6a2d] disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={disabled || !newLanguage.language || !newLanguage.proficiency}
         >
           Add Language
         </button>
